@@ -1,15 +1,21 @@
-Miscellaneous tools 
+Tools for running pytorch from command line (to make running on cluster easier)
 
 # create_imagefolder.py
 command line program that puts all your files in Pytorch ImageFolder.  Expects .jpeg images with label after final underscore
 
 flags:
 
---input_path # full path to directory with images
+--input_path      full path to directory with images
 
---output_path # full path to directory you want your ImageFolder 
+--output_path     full path to directory you want your ImageFolder output to go to. iMust be empty folder
 
---percent(float) #what percent of total patients allocated for validation 
+--percent(float)  percent of total patients allocated for validation (default=0.2)
+
+-- cat1_lab (str) name of first label (default='neg')
+
+-- cat2_lab (str) name of 2nd label (default='pos')
+
+-- balance (bool) if True, balances the dataset for you.  (default=True)
 
 Example Usage:
 1) Download file and navigate to folder in command line
