@@ -23,8 +23,7 @@ Example Usage:
 python3 create_imagefolder.py --input_path '/path_to_folder_with_images' --output_path '/path_to_output_folder' --percent=0.2
 
 # torchvision_train.py
-command line program that allows you to train neural networks using transfer learning in pytorch.  Basically just takes the 
-examples from pytorch website and allows them to run with command line
+command line program that allows you to train neural networks using transfer learning in pytorch.
 
 flags:
 
@@ -38,7 +37,7 @@ flags:
 
 --num_epochs (int) number of training iterations, default 1
 
---input_size (iut) pixel size of input image.  Default is 224, larger images will be cropped to this size
+--input_size (int) pixel size of input image.  Default is 224, larger images will be cropped to this size
 
 --feat_ext (bool)  if false, finetune the entire model.  Otherwise, only reshaped layers
 
