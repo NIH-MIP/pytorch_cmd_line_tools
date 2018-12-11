@@ -31,14 +31,29 @@ flags:
 
 --out_dir          filepath to where you want your model saved
 
---mn (path)        name of model.  Options include resnet, resnet18 - resnet 152, alexnet, vgg, squeezenet.  Default resnet18
+--mn (path)        name of model.  Options include resnet, resnet18 through resnet 152, alexnet, vgg, squeezenet.  Default resnet18
 
 --nc (int)         num classes.  default 2
 
 --num_epochs (int) number of training iterations, default 1
 
---input_size (int) pixel size of input image.  Default is 224, larger images will be cropped to this size
 
---feat_ext (bool)  if false, finetune the entire model.  Otherwise, only reshaped layers
+# Fastai_BinaryImageClassification.py
+command line tool that uses fastai library with command line interface for easier training on cluster
 
---pretrain(bool)   if false, no transfer learning used.  May the force be with you.
+flags:
+-- inpath path to ImageFolder 
+
+-- outname (not used right now)
+
+-- model_name (str) right now only resnets supports (18 through 152)
+
+-- bs (int) batch size
+
+-- epochs (int): number training epochs
+
+-- input_sz (int) size of image
+
+-- lr (float) learning rate
+
+-- unfreeze (bool) train the whole network
