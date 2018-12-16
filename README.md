@@ -28,9 +28,9 @@ command line program that allows you to train neural networks using transfer lea
 flags:
 
 
---image_dir        image directory in ImageFolder format (can use create_imagefolder script above to create
+--image_dir        required, image directory in ImageFolder format (can use create_imagefolder script above to create
 
---out_dir          filepath to where you want your model saved
+--out_dir          required, filepath to where you want your model saved
 
 --mn (str)        name of model.  Options include resnet, resnet18 through resnet 152, alexnet, vgg, squeezenet.  Default resnet18
 
@@ -38,9 +38,9 @@ flags:
 
 --num_epochs (int) number of training iterations, default 1
 
---input_size(int) size of input image
+--input_size(int) size of input image, default 224 (imagenet size)
 
---bs(int)          batch size
+--bs(int)          batch size, default 1
 
 -- feat_ext        needs to be false (train entire model) in the case of non-imagenet models
 
