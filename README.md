@@ -32,7 +32,7 @@ flags:
 
 --out_dir          filepath to where you want your model saved
 
---mn (path)        name of model.  Options include resnet, resnet18 through resnet 152, alexnet, vgg, squeezenet.  Default resnet18
+--mn (str)        name of model.  Options include resnet, resnet18 through resnet 152, alexnet, vgg, squeezenet.  Default resnet18
 
 --nc (int)         num classes.  default 2
 
