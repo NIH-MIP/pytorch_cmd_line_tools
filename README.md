@@ -38,6 +38,14 @@ flags:
 
 --num_epochs (int) number of training iterations, default 1
 
+--input_size(int) size of input image
+
+--bs(int)          batch size
+
+-- feat_ext        needs to be false (train entire model) in the case of non-imagenet models
+
+-- pretrain        true for transfer learning
+
 
 # Fastai_BinaryImageClassification.py
 command line tool that uses fastai library with command line interface for easier training on cluster
