@@ -44,11 +44,11 @@ class CreateImageFolder:
         all_file_path=pd.Series([os.path.join(self.inpath,file) for file in os.listdir(self.inpath)])
 
         #split into training and test tests, place into dictionary
-        valid=all_file_path.sample(frac=self.percent, random_state=200)
-        train=all_file_path.drop(valid.index)
-        split={'train':train.tolist(),'valid':valid.tolist()}
+        val=all_file_path.sample(frac=self.percent, random_state=200)
+        train=all_file_path.drop(val.index)
+        split={'train':train.tolist(),'val':val.tolist()}
 
-        #iteratve over train/valid data and copy files into negative and positive based on filename
+        #iteratve over train/val data and copy files into negative and positive based on filename
         for state in split.keys():
             state_item=split[state]
             for path in state_item:
@@ -66,7 +66,7 @@ class CreateImageFolder:
         '''
 
         #define all directories
-        states=['train','valid']
+        states=['train','val']
 
         for state in states:
             path_state_dir=os.path.join(self.outpath,state)
@@ -100,10 +100,10 @@ class CreateImageFolder:
             print("difference classes is {}".format(diff))
             output=[os.path.join(self.outpath,'train',smaller,file) for file in os.listdir(os.path.join(self.outpath,'train',smaller))]
             output_series=pd.Series(output)
-            valid = output_series.sample(diff,replace=True)
+            val = output_series.sample(diff,replace=True)
             print('performing oversampling!')
 
-            for file in valid:
+            for file in val:
                 jpeg_removed = file.split('.jpeg')[0]
                 random_num=str(''.join(random.sample('0123456789', 5)))
                 new_filename=jpeg_removed+random_num+'.jpeg'
