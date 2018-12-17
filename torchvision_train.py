@@ -120,9 +120,13 @@ def initialize_model(model_name, input_size, num_classes, feature_extract=True, 
 
 def load_data(args):
     '''create dataset from image folder'''
+    
+    #check to see if you want to normalize using stephanie's deconvolved images
+    if args.deconv==True:
+        data_tfs=data_transforms_deconv(args)
 
-
-    data_tfs=data_transforms(args) #using function belwo
+    if args.deconv==False:
+        data_tfs=data_transforms(args) 
 
 
     # Create training and validation datasets
@@ -152,6 +156,24 @@ def data_transforms(args):
             transforms.CenterCrop(args.input_sz),
             transforms.ToTensor(),
             transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+        ]),
+    }
+
+    return data_transforms
+
+def data_transforms_deconv(args):
+    data_transforms = {
+        'train': transforms.Compose([
+            transforms.RandomResizedCrop(args.input_sz),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            transforms.Normalize([0.75441, 0.83097, 0.87799], [0.15875, 0.13227, 0.1212])
+        ]),
+        'val': transforms.Compose([
+            transforms.Resize(args.input_sz),
+            transforms.CenterCrop(args.input_sz),
+            transforms.ToTensor(),
+            transforms.Normalize([0.75443, 0.83162, 0.8778], [0.15951, 0.13228, 0.12160])
         ]),
     }
 
@@ -301,6 +323,7 @@ if __name__=='__main__':
     parser.add_argument('--input_sz', default=224, type=int)
     parser.add_argument('--feat_ext', default=True,type=bool)  # when false, finetune entire model, if true only reshaped layers
     parser.add_argument('--pretrain', default=True, type=bool)
+    parser.add_argument('--deconv', default=False, type=bool) #if using Stephanie's deconvolved path images
     args = parser.parse_args()
 
 
