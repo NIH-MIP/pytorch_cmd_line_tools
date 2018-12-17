@@ -204,7 +204,7 @@ def create_optimizer(args,model_ft,):
                 print("\t",name)
 
     # Observe that all parameters are being optimized
-    optimizer_ft = optim.SGD(params_to_update, lr=args.lr, momentum=args.mo)
+    optimizer_ft = optim.SGD(params_to_update, lr=args.lr, momentum=args.momentum)
 
     return optimizer_ft
 
