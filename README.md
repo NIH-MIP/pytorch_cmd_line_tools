@@ -1,4 +1,4 @@
-Tools for running pytorch from command line (to make running on cluster easier)
+Tools for running deep learning models from command line (to make it easier to run on Biowulf cluster)
 
 # create_imagefolder.py
 command line program that puts all your files in Pytorch ImageFolder.  Expects .jpeg images with label after final underscore
