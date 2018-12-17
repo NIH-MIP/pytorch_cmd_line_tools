@@ -2,7 +2,6 @@
 
 #author @t_sanf
 
-
 from __future__ import print_function
 from __future__ import division
 import torch
@@ -159,7 +158,7 @@ def data_transforms(args):
     return data_transforms
 
 
-def create_optimizer(args,model_ft):
+def create_optimizer(args,model_ft,):
 
     # Send the model to GPU
     model_ft = model_ft.to(device)
@@ -183,7 +182,7 @@ def create_optimizer(args,model_ft):
                 print("\t",name)
 
     # Observe that all parameters are being optimized
-    optimizer_ft = optim.SGD(params_to_update, lr=0.001, momentum=0.9)
+    optimizer_ft = optim.SGD(params_to_update, lr=args.lr, momentum=args.mo)
 
     return optimizer_ft
 
@@ -197,8 +196,14 @@ def train_model(args,model, dataloaders, criterion, optimizer, num_epochs=25, is
 
     val_acc_history = []
 
+
     best_model_wts = copy.deepcopy(model.state_dict())
     best_acc = 0.0
+
+    train_loss_log=[]
+    train_counter=[]
+    val_loss_log=[]
+    val_counter=[]
 
     for epoch in range(num_epochs):
         print('Epoch {}/{}'.format(epoch, num_epochs - 1))
@@ -229,15 +234,8 @@ def train_model(args,model, dataloaders, criterion, optimizer, num_epochs=25, is
                     # Special case for inception because in training it has an auxiliary output. In train
                     #   mode we calculate the loss by summing the final output and the auxiliary output
                     #   but in testing we only consider the final output.
-                    if is_inception and phase == 'train':
-                        # From https://discuss.pytorch.org/t/how-to-optimize-inception-model-with-auxiliary-classifiers/7958
-                        outputs, aux_outputs = model(inputs)
-                        loss1 = criterion(outputs, labels)
-                        loss2 = criterion(aux_outputs, labels)
-                        loss = loss1 + 0.4*loss2
-                    else:
-                        outputs = model(inputs)
-                        loss = criterion(outputs, labels)
+                    outputs = model(inputs)
+                    loss = criterion(outputs, labels)
 
                     _, preds = torch.max(outputs, 1)
 
@@ -256,11 +254,27 @@ def train_model(args,model, dataloaders, criterion, optimizer, num_epochs=25, is
             print('{} Loss: {:.4f} Acc: {:.4f}'.format(phase, epoch_loss, epoch_acc))
 
             # deep copy the model
-            if phase == 'valid' and epoch_acc > best_acc:
+
+
+            if phase == 'val':
+                val_acc_history.append(epoch_acc)
+
+            if phase=='train' and epoch%10==0:
+                train_counter.append(epoch)
+                train_loss_log.append(epoch_loss)
+
+            if phase=='val' and epoch%10==0:
+                val_counter.append(epoch)
+                val_loss_log.append(epoch_loss)
+
+            if phase == 'val' and epoch_acc > best_acc:
                 best_acc = epoch_acc
                 best_model_wts = copy.deepcopy(model.state_dict())
-            if phase == 'valid':
-                val_acc_history.append(epoch_acc)
+
+
+    log_dict={'train_counter':train_counter,'train_loss_log':train_loss_log,'val_counter':val_counter,
+              'val_loss_log':val_loss_log,'val_acc_history':val_acc_history,'best_acc':best_acc}
+
 
 
     time_elapsed = time.time() - since
@@ -269,7 +283,7 @@ def train_model(args,model, dataloaders, criterion, optimizer, num_epochs=25, is
 
     # load best model weights
     model.load_state_dict(best_model_wts)
-    return model, val_acc_history
+    return model, val_acc_history,epoch_loss_log,epoch_counter
 
 
 
@@ -282,6 +296,8 @@ if __name__=='__main__':
     parser.add_argument('--num_class', '--nc', default=2, type=int)
     parser.add_argument('--bs', default=1, type=int)
     parser.add_argument('--num_epochs', default=1, type=int)
+    parser.add_argument('--lr', default=0.001, type=float)
+    parser.add_argument('--momentum','--mo', default=0.9, type=float)
     parser.add_argument('--input_sz', default=224, type=int)
     parser.add_argument('--feat_ext', default=True,type=bool)  # when false, finetune entire model, if true only reshaped layers
     parser.add_argument('--pretrain', default=True, type=bool)
@@ -299,8 +315,16 @@ if __name__=='__main__':
 
     print("training_model")
 
-    model,hist=train_model(args,model=model_ft, dataloaders=dataloaders_dict, criterion=criterion_ft, optimizer=optimizer_ft,
+    model,hist,epoch_loss_log,epoch_counter=train_model(args,model=model_ft, dataloaders=dataloaders_dict, criterion=criterion_ft, optimizer=optimizer_ft,
                 num_epochs=args.num_epochs, is_inception=False)
 
     print("saving model")
     torch.save(model, os.path.join(args.out_dir,args.model_name+'_'+dt.datetime.now().strftime("%I:%M%p_%B_%d_%Y")))
+    torch.save(model.state_dict(), os.path.join(args.out_dir,args.model_name+'_'+dt.datetime.now().strftime("%I:%M%p_%B_%d_%Y")))
+    torch.save(optimizer_ft.state_dict(), os.path.join(args.out_dir,args.model_name+'_'+dt.datetime.now().strftime("%I:%M%p_%B_%d_%Y")))
+
+    fig = plt.figure()
+    plt.scatter(epoch_counter, epoch_loss_log, color='red')
+    plt.legend(['Train Loss', 'Test Loss'], loc='upper right')
+    plt.xlabel('number of training examples seen')
+    plt.ylabel('negative log likelihood loss')
