@@ -88,7 +88,7 @@ if __name__=="__main__":
     #parser
     parser = argparse.ArgumentParser(description='Train_Model')
     parser.add_argument('--inpath',default='/home/tom/Dropbox/Github/PyTorch/Image_Class_Detect/data/dogscats')  # image directory in ImageFolder format
-    parser.add_argument('--outname', default='kinda_sucky')  # where you want model saved
+    parser.add_argument('--outname', default='changeme')  # where you want model saved
     parser.add_argument('--model_name', '--mn ', default='resnet18', type=str)
     parser.add_argument('--num_class', '--nc', default=2, type=int)
     parser.add_argument('--bs', default=1, type=int)
