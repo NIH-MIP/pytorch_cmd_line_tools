@@ -120,13 +120,13 @@ def initialize_model(model_name, input_size, num_classes, feature_extract=True, 
 
 def load_data(args):
     '''create dataset from image folder'''
-    
+
     #check to see if you want to normalize using stephanie's deconvolved images
     if args.deconv==True:
         data_tfs=data_transforms_deconv(args)
 
     if args.deconv==False:
-        data_tfs=data_transforms(args) 
+        data_tfs=data_transforms(args)
 
 
     # Create training and validation datasets
@@ -281,11 +281,11 @@ def train_model(args,model, dataloaders, criterion, optimizer, num_epochs=25, is
             if phase == 'val':
                 val_acc_history.append(epoch_acc)
 
-            if phase=='train' and epoch%10==0:
+            if phase=='train':
                 train_counter.append(epoch)
                 train_loss_log.append(epoch_loss)
 
-            if phase=='val' and epoch%10==0:
+            if phase=='val':
                 val_counter.append(epoch)
                 val_loss_log.append(epoch_loss)
 
@@ -305,7 +305,7 @@ def train_model(args,model, dataloaders, criterion, optimizer, num_epochs=25, is
 
     # load best model weights
     model.load_state_dict(best_model_wts)
-    return model, val_acc_history,epoch_loss_log,epoch_counter
+    return model, log_dict
 
 
 
@@ -323,7 +323,7 @@ if __name__=='__main__':
     parser.add_argument('--input_sz', default=224, type=int)
     parser.add_argument('--feat_ext', default=True,type=bool)  # when false, finetune entire model, if true only reshaped layers
     parser.add_argument('--pretrain', default=True, type=bool)
-    parser.add_argument('--deconv', default=False, type=bool) #if using Stephanie's deconvolved path images
+    parser.add_argument('--deconv', default=False, type=bool) #set to True if using Stephanie's deconvolved path images
     args = parser.parse_args()
 
 
@@ -338,7 +338,7 @@ if __name__=='__main__':
 
     print("training_model")
 
-    model,hist,epoch_loss_log,epoch_counter=train_model(args,model=model_ft, dataloaders=dataloaders_dict, criterion=criterion_ft, optimizer=optimizer_ft,
+    model,log_dict=train_model(args,model=model_ft, dataloaders=dataloaders_dict, criterion=criterion_ft, optimizer=optimizer_ft,
                 num_epochs=args.num_epochs, is_inception=False)
 
     print("saving model")
@@ -347,7 +347,9 @@ if __name__=='__main__':
     torch.save(optimizer_ft.state_dict(), os.path.join(args.out_dir,args.model_name+'_'+dt.datetime.now().strftime("%I:%M%p_%B_%d_%Y")))
 
     fig = plt.figure()
-    plt.scatter(epoch_counter, epoch_loss_log, color='red')
-    plt.legend(['Train Loss', 'Test Loss'], loc='upper right')
+    plt.plot(log_dict['train_counter'], log_dict['train_loss_log'], color='blue')
+    plt.plot(log_dict['val_counter'], log_dict['val_loss_log'], color='red')
+    plt.legend(['Train Loss','Val_loss'], loc='upper right')
     plt.xlabel('number of training examples seen')
     plt.ylabel('negative log likelihood loss')
+    plt.savefig(args.out_dir+'/train_log'+dt.datetime.now().strftime("%I:%M%p_%B_%d_%Y"))
