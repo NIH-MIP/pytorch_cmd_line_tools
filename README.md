@@ -36,15 +36,21 @@ flags:
 
 --nc (int)         num classes.  default 2
 
+--bs (int)         batch size.  Default is 1
+
 --num_epochs (int) number of training iterations, default 1
 
---input_size(int) size of input image, default 224 (imagenet size)
+--lr (float)       learning rate.  Default is 0.001
 
---bs(int)          batch size, default 1
+-- mo (float)      momentum. default is 0.9
+
+--input_size(int) size of input image, default 224 (imagenet size)
 
 -- feat_ext        needs to be false (train entire model) in the case of non-imagenet models
 
 -- pretrain        true for transfer learning
+
+-- deconv          normalize for deconvolved images.  Default is False (normalize to imagenet).  Set to True for Dr Harmon Deconvolution
 
 
 # Fastai_BinaryImageClassification.py
