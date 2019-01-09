@@ -72,3 +72,22 @@ flags:
 -- lr (float) learning rate
 
 -- unfreeze (bool) train the whole network
+
+# fastai_binaryclassification_retrain.py
+command line to that uses fastai library with command line intervace.  Expects multiple directories in parent directoy, each of which has files in imagefolder format.  Will train model across multiple imagefolder
+
+--inpath (path) absolute path to 
+--savepath (path) path to save the model
+--model_name (str) one of many resnet models
+--num_class (int) default is 2
+--bs (int) batch size
+--epochs (int) number of ephocs
+--cycle_mult (int) number of cycles for finetuning
+--input_sz (int) pixel size
+--lr (float) learning rate
+--unfreeze (bool) True if you want to unfreeze
+--init_train 
+--retrain_last
+--retrain_all
+
+
