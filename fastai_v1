@@ -1,0 +1,232 @@
+import os
+import sys
+import datetime
+
+import fastai.vision as faiv
+import numpy as np
+import matplotlib.pyplot as plt
+import torch
+from torch import nn
+
+from fastai.vision import *
+import fastai
+
+
+
+class VisionBinary:
+    #torch.cuda.set_device(0)
+
+    def __init__(self):
+        self.imagedir='/home/tom/Desktop/Docetaxel_224_0.5'
+        self.outdir='/home/tom/Desktop/Docetaxel_224_0.5'
+        self.model_name='best-model'
+        self.tr_name='train'
+        self.val_name='valid'
+        self.img_sz=224
+        self.lr=0.0005
+        self.lr_range=slice(1e-6, 1e-4)
+        self.unfreeze=True
+        self.bs=64
+        self.greyscale=False
+        self.device=0
+        self.dc_e=4 #last layers epochs
+        self.all_e=4 #all epochs
+
+
+    def load_jpg_from_folder(self):
+        '''
+        expects a path to a base folder with multiple subfolders including 'training', 'testing', etc
+        :param path:
+        :return:
+        '''
+
+        tfms =([*rand_pad(padding=3, size=224, mode='zeros')], [])
+
+
+
+        data=(ImageList.from_folder(self.imagedir)
+             .split_by_folder(train=self.tr_name, valid=self.val_name)
+             .label_from_folder()
+             .transform(tfms,size=self.img_sz)
+             .databunch(bs=self.bs)
+             .normalize())
+        data.show_batch(rows=3, figsize=(7, 6))
+        return data
+
+
+
+    def train(self):
+        '''
+
+        :return:
+        '''
+
+        torch.cuda.set_device(self.device)
+
+        #make the filestructure for saving
+        if not os.path.isdir(os.path.join(self.imagedir,'confusion_matrix')):
+            os.mkdir(os.path.join(self.imagedir,'confusion_matrix'))
+        if not os.path.isdir(os.path.join(self.imagedir, 'top_loss')):
+            os.mkdir(os.path.join(self.imagedir, 'top_loss'))
+        if not os.path.isdir(os.path.join(self.imagedir,'saved_models')):
+            os.mkdir(os.path.join(self.imagedir, 'saved_models'))
+        if not os.path.isdir(os.path.join(self.imagedir,'hyperparameters')):
+            os.mkdir(os.path.join(self.imagedir, 'hyperparameters'))
+
+
+        data=self.load_jpg_from_folder()
+        print('data loaded')
+        learn = cnn_learner(data, models.resnet34,metrics=error_rate)
+        learn.fit_one_cycle(1,max_lr=self.lr)
+        learn.save(os.path.join(self.imagedir,'saved_models',self.model_name+"_"+'final_layers_tuned_'+str(datetime.datetime.now().strftime("%m%d%Y-%H%M"))))
+
+        if self.unfreeze==True:
+
+            learn.unfreeze()
+            learn.fit_one_cycle(1, max_lr=self.lr_range)
+            learn.save(os.path.join(self.imagedir, 'saved_models', self.model_name + "_" + 'all_layers_trained_' + str(
+                datetime.datetime.now().strftime("%m%d%Y-%H%M%S"))))
+
+        #plt.savefig(sys.stdout.buffer)
+
+        interp = ClassificationInterpretation.from_learner(learn)
+        losses, idxs = interp.top_losses()
+        interp.plot_confusion_matrix(figsize=(12, 12), dpi=60)
+        plt.savefig(os.path.join(self.imagedir,'confusion_matrix',self.model_name+'_'+str(datetime.datetime.now().strftime("%m%d%Y-%H%M"))))
+        interp.plot_top_losses(9, figsize=(15, 11))
+        plt.savefig(os.path.join(self.imagedir,'top_loss',self.model_name+'_'+str(datetime.datetime.now().strftime("%m%d%Y-%H%M"))))
+
+
+        file=open(os.path.join(self.imagedir,'hyperparameters','hyperparameters_'+str(datetime.datetime.now().strftime("%m%d%Y-%H%M"))+'.txt'),'w')
+        file.write('hyper-parameters for model trained {} \n'.format(str(datetime.datetime.now().strftime("%m%d%Y-%H%M"))))
+        file.write('model name is: {} \n'.format(self.model_name))
+        file.write('training name is: {} \n'.format(self.tr_name))
+        file.write('validation name is: {} \n'.format(self.val_name))
+        file.write('image size is: {} \n'.format(self.img_sz))
+        file.write('learning rate for dense connected is: {} \n'.format(self.lr))
+        file.write('learning rate range for whole network is: {} \n'.format(self.lr_range))
+        file.write('batch size is: {} \n'.format(self.bs))
+        file.write('this model was trained on device: {} \n'.format(self.device))
+        file.write('number epochs densely connnected: {} \n'.format(self.dc_e))
+        file.write('number epochs all layers: {} \n'.format(self.all_e))
+
+        file.close()
+
+
+
+
+
+    def apply_model_test(self,class1='PIRADS_2_3',class2='PIRADS_4_5',index=7,class1_list=[1,2,3],class2_list=[4,5]):
+        '''
+        applies model on patient level
+        :param class1(str): one class label output from learn.predict
+        :param class2(str): another one class label output from learn.predict
+        :param index(int): where to index in
+        :param class1_list: list of all labels in first class
+        :param class2_list: list of all labels in 2nd class
+        :return:
+        '''
+
+
+        learn = load_learner(path)
+
+
+        total = 0
+        votes_class1 = 0
+        votes_class2 = 0
+        gt_class1 = 0
+        gt_class2 = 0
+        pred_class_class1 = 0
+        pred_class_class2 = 0
+        correct = 0
+        incorrect = 0
+        correct_class1 = 0
+        correct_class2 = 0
+        for patient in os.listdir(os.path.join(path, 'test')):
+            total += 1
+            print(patient)
+            votes_class1 = 0
+            votes_class2 = 0
+            for image in os.listdir(os.path.join(path, 'test', patient)):
+                img = open_image(os.path.join(path, 'test', patient, image))
+                pred_class, pred_idx, outputs = learn.predict(img)
+                pred_class = str(pred_class)
+                if pred_class == class1:
+                    votes_class1 += 1
+                if pred_class == class2:
+                    votes_class2 += 1
+
+            print('votes '+class1 +': {}'.format(votes_class1))
+            print('votes '+class2+' : {}'.format(votes_class2))
+            # find ground turth
+            gt = int(patient.split('_')[index])
+
+            print('Ground truth PIRADS is {}'.format(gt))
+            if gt in class1_list:
+                gt_class1 += 1
+                gt = class1
+            elif gt in class2_list:
+                gt_class2 += 1
+                gt = class2
+
+            if votes_class1 > votes_class2:
+                pred_class_class1 += 1
+                pred = class1
+
+            elif votes_class1 < votes_class2:
+                pred_class_class2 += 1
+                pred = class2
+
+            elif votes_class1 == votes_class2:
+                pred_class_2 += 1
+                pred = class2
+
+            print("Prediction is {}".format(pred))
+
+            if gt == pred:
+                correct += 1
+                print("correct!")
+
+            elif gt != pred:
+                incorrect += 1
+                print("INCORRECT!")
+
+            if gt == class1 and gt == pred:
+                correct_class1 += 1
+
+            if gt == class2 and gt == pred:
+                correct_class2 += 1
+
+        print("")
+        print("----------------------")
+        print("Overall Correct Percent")
+        print(correct / total)
+
+        print("correct "+class1)
+
+        print(correct_class1 / gt_class1)
+
+        print("correct "+class2)
+        print(correct_class2 / gt_class2)
+
+
+class ResBlock(nn.Module):
+    def __init__(self, nf):
+        super().__init__()
+        self.conv1 = conv_layer(nf, nf)
+        self.conv2 = conv_layer(nf, nf)
+
+    def forward(self, x): return x + self.conv2(self.conv1(x))
+
+    def conv(ni, nf): return nn.Conv2d(ni, nf, kernel_size=3, stride=2, padding=1)
+
+def conv2(ni,nf): return conv_layer(ni,nf,stride=2)
+
+def conv_and_res(ni,nf): return nn.Sequential(conv2(ni, nf), res_block(nf))
+
+
+
+if __name__=='__main__':
+    c=VisionBinary()
+    c.train()
+
