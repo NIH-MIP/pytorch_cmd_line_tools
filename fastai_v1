@@ -15,35 +15,38 @@ import neptune
 
 # same token as above
 # make sure to put correct project_qualified_name
-neptune.init(api_token='',\
-             project_qualified_name='tsanford808/bladderca')
-
+neptune.init(
+    api_token='eyJhcGlfYWRkcmVzcyI6Imh0dHBzOi8vdWkubmVwdHVuZS5tbCIsImFwaV9rZXkiOiI0ODgzY2FlOS1iODk2LTQ5OTItYTBjMC04NDhmNDllZTljNTIifQ==', \
+    project_qualified_name='tsanford808/bladderca')
 
 
 class VisionBinary:
 
     def __init__(self):
-        self.imagedir='/home/tom/Desktop/Docetaxel_224_0.5'
-        self.outdir='/home/tom/Desktop/docetaxel_training_progress'
+        self.imagedir='/data/Stephanie_Harmon/bladder_path/classification_byPatient/5x_patches/decon/300_thresh_0.8'
+        self.outdir='/data/Stephanie_Harmon/bladder_path/classification_byPatient/5x_patches/decon/300_thresh_0.8/pytorch_training'
         self.testPath=os.path.join(self.imagedir,'dev_valid')
-        self.model_name='Docetaxel_initial'
+        self.model_name='bladder_test'
         self.tr_name='train'
         self.val_name='valid'
-        self.img_sz=300
+        self.resnet='resnet18'
+        self.img_sz=30
         self.lr=0.00001
         self.lr_range=slice(1e-9, 1e-6)
-        self.bs=32
+        self.bs=16
         self.device=1
-        self.dc_e=3 #last layers epochs
-        self.all_e=20 #all epochs
+        self.dc_e=1 #last layers epochs
+        self.all_e=1 #all epochs
         #self.lighting=0
         self.rotate=0
         self.neptune=True
-        self.greyscale=False
         self.unfreeze=False
+        self.model_dict={'resnet18':[models.resnet18],'resnet34':[models.resnet34],'resnet50':[models.resnet50],
+            'resnet101':[models.resnet101],'resnet152':[models.resnet152]}
 
-
-
+        #retraining
+        self.retrain=False
+        self.save_model_name='5x_resnet101_worker0_25constrnt_unfreeze_all_layers_trained_04222019-1122'
 
     def load_jpg_from_folder(self):
         '''
@@ -52,18 +55,17 @@ class VisionBinary:
         :return: databunch
         '''
 
-        #tfms =([*rand_pad(padding=3, size=self.img_sz, mode='zeros')], [])
-        #tfms = get_transforms(flip_vert=True, max_lighting=0.1, max_zoom=1.05, max_warp=0.)
+        # tfms =([*rand_pad(padding=3, size=self.img_sz, mode='zeros')], [])
+        # tfms = get_transforms(flip_vert=True, max_lighting=0.1, max_zoom=1.05, max_warp=0.)
         tfms = get_transforms(flip_vert=True, max_rotate=self.rotate)
 
-        data=(ImageList.from_folder(self.imagedir)
-             .split_by_folder(train=self.tr_name, valid=self.val_name)
-             .label_from_folder()
-             .transform(tfms,size=self.img_sz)
-             .databunch(bs=self.bs)
-             .normalize())
+        data = (ImageList.from_folder(self.imagedir)
+                .split_by_folder(train=self.tr_name, valid=self.val_name)
+                .label_from_folder()
+                .transform(tfms, size=self.img_sz)
+                .databunch(bs=self.bs)
+                .normalize())
         return data
-
 
 
     def train(self):
@@ -72,107 +74,52 @@ class VisionBinary:
         :return:
         '''
 
-
-        #torch.cuda.set_device(self.device)
-
-        #make the filestructure for saving
-        if not os.path.isdir(self.outdir):
-            os.mkdir(self.outdir)
-        if not os.path.isdir(os.path.join(self.outdir,'confusion_matrix')):
-            os.mkdir(os.path.join(self.outdir,'confusion_matrix'))
-        if not os.path.isdir(os.path.join(self.outdir, 'top_loss')):
-            os.mkdir(os.path.join(self.outdir, 'top_loss'))
-        if not os.path.isdir(os.path.join(self.outdir,'saved_models')):
-            os.mkdir(os.path.join(self.outdir, 'saved_models'))
-        if not os.path.isdir(os.path.join(self.outdir,'hyperparameters')):
-            os.mkdir(os.path.join(self.outdir, 'hyperparameters'))
-        if not os.path.isdir(os.path.join(self.outdir,'exported_models')):
-            os.mkdir(os.path.join(self.outdir, 'exported_models'))
+        torch.cuda.set_device(self.device)
 
 
-        data=self.load_jpg_from_folder()
+        data = self.load_jpg_from_folder()
         print('data loaded')
-        print(data.classes)
-        
-        if self.neptune==True:
+        print('classes in this dataset are {}'.format(data.classes))
+
+        #train loop
+        if self.neptune == True:
             with neptune.create_experiment():
-                learn = cnn_learner(data, models.resnet18,metrics=error_rate)
-                learn.fit_one_cycle(self.dc_e,max_lr=self.lr)
-                learn.save(os.path.join(self.outdir,'saved_models',self.model_name+"_"+'final_layers_tuned_'+str(datetime.datetime.now().strftime("%m%d%Y-%H%M"))))
-                learn.export(os.path.join(self.outdir, 'exported_models', self.model_name + "_" + str(
-                    datetime.datetime.now().strftime("%m%d%Y-%H%M")+'.pkl')))
-    
-                if self.unfreeze==True:
-                    print("unfreezing and retraining")
-                    learn.unfreeze()
-                    learn.fit_one_cycle(self.all_e, max_lr=self.lr_range)
-                    learn.save(os.path.join(self.outdir, 'saved_models', self.model_name + "_" + 'all_layers_trained_' + str(
-                        datetime.datetime.now().strftime("%m%d%Y-%H%M"))))
-                    learn.export(os.path.join(self.outdir, 'exported_models',self.model_name + "_" + str(
-                        datetime.datetime.now().strftime("%m%d%Y-%H%M"))))
+                if self.retrain==True:
+                    model_path = os.path.join(self.outdir, 'exported_models')
+                    learn = load_learner(model_path)
+                else:
+                    learn = cnn_learner(data, self.model_dict[self.resnet][0], metrics=error_rate)
 
+                self.trainblock(learner=learn)
+
+        #train loop without neptune
         else:
-            learn = cnn_learner(data, models.resnet18, metrics=error_rate)
-            learn.fit_one_cycle(self.dc_e, max_lr=self.lr)
-            learn.save(os.path.join(self.outdir, 'saved_models', self.model_name + "_" + 'final_layers_tuned_' + str(
-                datetime.datetime.now().strftime("%m%d%Y-%H%M"))))
-            learn.export(os.path.join(self.outdir, 'exported_models', self.model_name + "_" + str(
-                datetime.datetime.now().strftime("%m%d%Y-%H%M") + '.pkl')))
+            if self.retrain == True:
+                model_path = os.path.join(self.outdir, 'exported_models')
+                learn = load_learner(model_path)
+            else:
+                learn = cnn_learner(data, self.model_dict[self.resnet][0], metrics=error_rate)
 
-            if self.unfreeze == True:
-                print("unfreezing and retraining")
-                learn.unfreeze()
-                learn.fit_one_cycle(self.all_e, max_lr=self.lr_range)
-                learn.save(
-                    os.path.join(self.outdir, 'saved_models', self.model_name + "_" + 'all_layers_trained_' + str(
-                        datetime.datetime.now().strftime("%m%d%Y-%H%M"))))
-                learn.export(os.path.join(self.outdir, 'exported_models', self.model_name + "_" + str(
-                    datetime.datetime.now().strftime("%m%d%Y-%H%M"))))
+            self.trainblock(learner=learn)
 
+        save_name = self.model_name + "_" + str(datetime.datetime.now().strftime("%m%d%Y-%H%M")) + '.pkl'
 
+        #save figures
+        self.save_figures(learner=learn)
 
-        save_name=self.model_name + "_" + str(datetime.datetime.now().strftime("%m%d%Y-%H%M"))+'.pkl'
-
-        #plt.savefig(sys.stdout.buffer)
-        interp = ClassificationInterpretation.from_learner(learn)
-        losses, idxs = interp.top_losses()
-        interp.plot_confusion_matrix(figsize=(12, 12), dpi=60)
-        plt.savefig(os.path.join(self.outdir,'confusion_matrix',self.model_name+'_'+str(datetime.datetime.now().strftime("%m%d%Y-%H%M"))))
-        interp.plot_top_losses(9, figsize=(15, 11))
-        plt.savefig(os.path.join(self.outdir,'top_loss',self.model_name+'_'+str(datetime.datetime.now().strftime("%m%d%Y-%H%M"))))
-
-
-        file=open(os.path.join(self.outdir,'hyperparameters','hyperparameters_'+'_'+self.model_name+'_'+str(datetime.datetime.now().strftime("%m%d%Y-%H%M"))+'.txt'),'w')
-        file.write('hyper-parameters for model trained {} \n'.format(str(datetime.datetime.now().strftime("%m%d%Y-%H%M"))))
-        file.write('model name is: {} \n'.format(self.model_name))
-        print('model name is: {} \n'.format(self.model_name))
-        file.write('training name is: {} \n'.format(self.tr_name))
-        file.write('validation name is: {} \n'.format(self.val_name))
-        file.write('image size is: {} \n'.format(self.img_sz))
-        file.write('learning rate for dense connected is: {} \n'.format(self.lr))
-        print('learning rate for dense connected is: {} \n'.format(self.lr))
-        file.write('learning rate range for whole network is: {} \n'.format(self.lr_range))
-        print('learning rate for dense connected is: {} \n'.format(self.lr))
-        file.write('batch size is: {} \n'.format(self.bs))
-        file.write('this model was trained on device: {} \n'.format(self.device))
-        print('this model was trained on device: {} \n'.format(self.device))
-        file.write('number epochs densely connnected: {} \n'.format(self.dc_e))
-        file.write('number epochs all layers: {} \n'.format(self.all_e))
-        file.write('unfreeze?: {} \n'.format(str(self.unfreeze)))
-        file.write('rotation?: {} \n'.format(str(self.rotate)))
-        #file.write('lighting?: {} \n'.format(str(self.lighting)))
-        file.close()
+        # save hyperparameters
+        self.save_hyperparameters(filename='hyperparameters')
 
         return save_name
 
-    def convert_model_to_export(self,model_name='best_model_evah.pkl'):
 
-        initial_filename=os.path.join(self.outdir,'exported_models',model_name)
-        final_filename=os.path.join(self.outdir,'exported_models','export.pkl')
-        shutil.copy2(initial_filename,final_filename)
+    def convert_model_to_export(self, model_name='5x_resnet101_worker0_25constrnt_unfreeze_04222019-1057.pkl'):
+        initial_filename = os.path.join(self.outdir, 'exported_models', model_name)
+        final_filename = os.path.join(self.outdir, 'exported_models', 'export.pkl')
+        shutil.copy2(initial_filename, final_filename)
 
 
-    def apply_model_test(self,class1='neg',class2='pos',int=False,index=1,class1_list=['neg'],class2_list=['pos']):
+    def apply_test_vote(self, class1='neg', class2='pos', int=False, index=1, class1_list=['neg'], class2_list=['pos']):
         '''
         applies model on patient level
         :param class1(str): one class label output from learn.predict
@@ -182,51 +129,61 @@ class VisionBinary:
         :param class2_list: list of all labels in 2nd class
         :return:
         '''
-        
-        #set up the output directory
+
+        # set up the output directory
         if not os.path.isdir(self.outdir):
             os.mkdir(self.outdir)
-        if not os.path.isdir(os.path.join(self.outdir,'validation_results')):
-            os.mkdir(os.path.join(self.outdir,'validation_results'))
-        
+        if not os.path.isdir(os.path.join(self.outdir, 'val_results')):
+            os.mkdir(os.path.join(self.outdir, 'val_results'))
 
-        #change this part
-        model_name= self.model_name
-        model_path=os.path.join(self.outdir,'exported_models')
+        # change this part
+        model_path = os.path.join(self.outdir, 'exported_models')
         learn = load_learner(model_path)
-        test_path=self.testPath
+        test_path = self.testPath
 
         total = 0
         votes_class1 = 0
         votes_class2 = 0
         gt_class1 = 0
         gt_class2 = 0
-        pred_class_class1 = 0
-        pred_class_class2 = 0
+        pred_class_1 = 0
+        pred_class_2 = 0
         correct = 0
         incorrect = 0
         correct_class1 = 0
         correct_class2 = 0
+
+        df_out = pd.DataFrame()
 
         for patient in os.listdir(os.path.join(test_path)):
             total += 1
             print(patient)
             votes_class1 = 0
             votes_class2 = 0
+
             for image in os.listdir(os.path.join(test_path, patient)):
                 img = open_image(os.path.join(test_path, patient, image))
                 pred_class, pred_idx, outputs = learn.predict(img)
+
+                outputs_np=outputs.numpy()
+                neg_sofmx=outputs_np[0]
+                pos_sofmx=outputs_np[1]
+
+
                 pred_class = str(pred_class)
                 if pred_class == class1:
                     votes_class1 += 1
                 if pred_class == class2:
                     votes_class2 += 1
 
-            print('votes '+class1 +': {}'.format(votes_class1))
-            print('votes '+class2+' : {}'.format(votes_class2))
+                t_df=pd.DataFrame([image,pred_class,neg_sofmx,pos_sofmx]).transpose()
+                df_out=pd.concat([df_out,t_df],axis=0)
+            print(df_out.shape)
+            print('votes ' + class1 + ': {}'.format(votes_class1))
+            print('votes ' + class2 + ' : {}'.format(votes_class2))
 
             # find ground turth
-            if int==True:
+            if int == True:
                 gt = int(patient.split('_')[index])
 
             gt = patient.split('_')[index]
@@ -240,11 +197,11 @@ class VisionBinary:
                 gt = class2
 
             if votes_class1 > votes_class2:
-                pred_class_class1 += 1
+                pred_class_1 += 1
                 pred = class1
 
             elif votes_class1 < votes_class2:
-                pred_class_class2 += 1
+                pred_class_2 += 1
                 pred = class2
 
             elif votes_class1 == votes_class2:
@@ -271,22 +228,116 @@ class VisionBinary:
         print("----------------------")
         print("Overall Correct Percent")
         print(correct / total)
-        print("correct "+class1)
+        print("correct " + class1)
         print(correct_class1 / gt_class1)
-        print("correct "+class2)
+        print("correct " + class2)
         print(correct_class2 / gt_class2)
 
-        file = open(os.path.join(self.outdir, 'validation_results', 'validation_results' + '_' + self.model_name + '_' + str(
-            datetime.datetime.now().strftime("%m%d%Y-%H%M")) + '.txt'), 'w')
-        file.write('validation results for model trained {} \n'.format(str(datetime.datetime.now().strftime("%m%d%Y-%H%M"))))
-        file.write('overall correct percent {}: '.format(str(correct / total)))
-        file.write('correct' +class1+' {}: '.format(str(correct_class1 / gt_class1)))
-        file.write('correct' +class2+' {}: '.format(str(correct_class2 / gt_class2)))
+        #write results out to file
+
+        file = open(
+            os.path.join(self.outdir, 'val_results', 'performance' + '_' + self.model_name + '_' + str(
+                datetime.datetime.now().strftime("%m%d%Y-%H%M")) + '.txt'), 'w')
+        file.write(
+            'validation results for model trained {} \n'.format(str(datetime.datetime.now().strftime("%m%d%Y-%H%M"))))
+        file.write('overall correct percent {}: \n'.format(str(correct / total)))
+        file.write('correct' + class1 + ' {}: \n'.format(str(correct_class1 / gt_class1)))
+        file.write('correct' + class2 + ' {}: \n'.format(str(correct_class2 / gt_class2)))
+        file.close()
+
+        #write dataframe out to csv
+        df_out.columns=['img_name','class_pred','neg_pred','pos_pred']
+        df_out.to_csv(os.path.join(self.outdir, 'val_results', 'val_results_by_img' + '_' + self.model_name + '_' + str(
+                datetime.datetime.now().strftime("%m%d%Y-%H%M")) + '.csv'))
+
+####################
+# helper functions #
+####################
+
+    def trainblock(self,learner):
+        '''basic block to train network
+        a fastai learner will need tobe defined ebfore the model is trained
+        '''
+
+        learn=learner
+        learn.fit_one_cycle(self.dc_e, max_lr=self.lr)
+        learn.save(os.path.join(self.outdir, 'saved_models', self.model_name + "_" + 'final_layers_tuned_' + str(
+            datetime.datetime.now().strftime("%m%d%Y-%H%M"))))
+        learn.export(os.path.join(self.outdir, 'exported_models', self.model_name + "_" + str(
+            datetime.datetime.now().strftime("%m%d%Y-%H%M") + '.pkl')))
+
+        # loop to train if unfreezing is desired
+        if self.unfreeze == True:
+            print("unfreezing and retraining")
+            learn.unfreeze()
+            learn.fit_one_cycle(self.all_e, max_lr=self.lr_range)
+            learn.save(
+                os.path.join(self.outdir, 'saved_models', self.model_name + "_" + 'all_layers_trained_' + str(
+                    datetime.datetime.now().strftime("%m%d%Y-%H%M"))))
+            learn.export(os.path.join(self.outdir, 'exported_models', self.model_name + "_" + str(
+                datetime.datetime.now().strftime("%m%d%Y-%H%M"))))
+
+    def save_figures(self,learner):
+        interp = ClassificationInterpretation.from_learner(learner)
+        losses, idxs = interp.top_losses()
+        interp.plot_confusion_matrix(figsize=(12, 12), dpi=60)
+        plt.savefig(os.path.join(self.outdir, 'confusion_matrix',
+                                 self.model_name + '_' + str(datetime.datetime.now().strftime("%m%d%Y-%H%M"))))
+        interp.plot_top_losses(9, figsize=(15, 11))
+        plt.savefig(os.path.join(self.outdir, 'top_loss',
+                                 self.model_name + '_' + str(datetime.datetime.now().strftime("%m%d%Y-%H%M"))))
+
+    def save_hyperparameters(self,filename='hyperparameters'):
+        file = open(
+            os.path.join(self.outdir, 'hyperparameters',
+                         filename + '_' + self.model_name + '_' + str(
+                             datetime.datetime.now().strftime("%m%d%Y-%H%M")) + '.txt'), 'w')
+        file.write(
+            'hyper-parameters for model at {} \n'.format(
+                str(datetime.datetime.now().strftime("%m%d%Y-%H%M"))))
+        file.write('Resnet type is: {} \n'.format(self.model_dict[self.resnet][0]))
+        file.write('model name is: {} \n'.format(self.model_name))
+        print('model name is: {} \n'.format(self.model_name))
+        file.write('training name is: {} \n'.format(self.tr_name))
+        file.write('validation name is: {} \n'.format(self.val_name))
+        file.write('image size is: {} \n'.format(self.img_sz))
+        file.write('learning rate for dense connected is: {} \n'.format(self.lr))
+        print('learning rate for dense connected is: {} \n'.format(self.lr))
+        file.write('learning rate range for whole network is: {} \n'.format(self.lr_range))
+        print('learning rate for dense connected is: {} \n'.format(self.lr))
+        file.write('batch size is: {} \n'.format(self.bs))
+        file.write('this model was trained on device: {} \n'.format(self.device))
+        print('this model was trained on device: {} \n'.format(self.device))
+        file.write('number epochs densely connnected: {} \n'.format(self.dc_e))
+        file.write('number epochs all layers: {} \n'.format(self.all_e))
+        file.write('unfreeze?: {} \n'.format(str(self.unfreeze)))
+        file.write('rotation?: {} \n'.format(str(self.rotate)))
+        # file.write('lighting?: {} \n'.format(str(self.lighting)))
+        file.close()
+
+    def make_filestructure(self):
+        '''
+        make the file structure to write out all saved files
+        :return:
+        '''
+        # make the filestructure for saving
+        if not os.path.isdir(self.outdir):
+            os.mkdir(self.outdir)
+        if not os.path.isdir(os.path.join(self.outdir, 'confusion_matrix')):
+            os.mkdir(os.path.join(self.outdir, 'confusion_matrix'))
+        if not os.path.isdir(os.path.join(self.outdir, 'top_loss')):
+            os.mkdir(os.path.join(self.outdir, 'top_loss'))
+        if not os.path.isdir(os.path.join(self.outdir, 'saved_models')):
+            os.mkdir(os.path.join(self.outdir, 'saved_models'))
+        if not os.path.isdir(os.path.join(self.outdir, 'hyperparameters')):
+            os.mkdir(os.path.join(self.outdir, 'hyperparameters'))
+        if not os.path.isdir(os.path.join(self.outdir, 'exported_models')):
+            os.mkdir(os.path.join(self.outdir, 'exported_models'))
 
 
 
-if __name__=='__main__':
-    c=VisionBinary()
-    name=c.train()
+if __name__ == '__main__':
+    c = VisionBinary()
+    name = c.train()
     c.convert_model_to_export()
-    c.apply_model_test()
+    c.apply_test_vote()
