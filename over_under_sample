@@ -1,4 +1,4 @@
-import os
+iimport os
 import numpy as np
 import pandas as pd
 import re
@@ -98,7 +98,7 @@ class OverUnderSample:
         print('size minorty class is {}'.format(len(lesser)))
         for file in lesser:
             initial_path=os.path.join(self.imgPATH,file)
-            final_path=os.path.join(self.outdir,'train'+'_'+'minority_oversampled'+'_'+str(self.minority_percent),min_pat.split('_')[1],file+'_'+''.join(random.sample('0123456789',5))+'.jpeg')
+            final_path=os.path.join(self.outdir,'train'+'_'+'minority_oversampled'+'_'+str(self.minority_percent),min_pat.split('_')[1],file.split('.jpeg')[0]+'_'+''.join(random.sample('0123456789',5))+'.jpeg')
             shutil.copy2(initial_path,final_path)
 
 
