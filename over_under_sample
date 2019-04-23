@@ -1,0 +1,164 @@
+import os
+import numpy as np
+import pandas as pd
+import re
+import random
+import shutil
+
+
+class OverUnderSample:
+    '''expects one folder with all the '''
+
+    random.seed(4)
+
+    def __init__(self):
+        self.imgPATH='/home/tom/Desktop/sampling_folder'
+        self.outdir='/home/tom/Desktop/outdir'
+        self.first_pat='_res'
+        self.sec_pat='_sens'
+        self.valset=False
+        self.val_percent=0.2
+        self.minority_percent=0.7
+
+
+    def balance(self):
+
+        all_files=[file for file in os.listdir(self.imgPATH)]
+
+        if self.valset==True:
+            subsample=random.sample(all_files,int(self.val_percent*len(all_files)))
+            files=list(set(all_files)-set(subsample))
+
+        elif self.valset==False:
+            files=all_files
+
+        #sort the files by pattern of recgonition
+        first_pat_l=[]; sec_pat_l=[]
+        for file in files:
+            if re.search(self.first_pat,file):
+                first_pat_l+=[file]
+            if re.search(self.sec_pat,file):
+                sec_pat_l+=[file]
+
+        #figure out which pattern is larger
+        if len(first_pat_l)>len(sec_pat_l):
+            greater=first_pat_l
+            lesser=sec_pat_l
+            maj_pat=self.first_pat; min_pat=self.sec_pat
+        elif len(first_pat_l)<len(sec_pat_l):
+            greater=sec_pat_l
+            lesser=first_pat_l
+            maj_pat = self.sec_pat;min_pat = self.first_pat
+        elif len(first_pat_l)==len(sec_pat_l):
+            print('lists are equal!')
+
+        print("pattern {} has more samples than pattern {}".format(maj_pat.split('_')[1],min_pat.split('_')[1]))
+        print("number in pattern {} is {}".format(maj_pat.split('_')[1],len(greater)))
+        print("number in pattern {} is {}".format(min_pat.split('_')[1],len(lesser)))
+
+
+        #set up filestructure for saving
+        if not os.path.exists(os.path.join(self.outdir,'train'+'_'+'minority_oversampled'+'_'+str(self.minority_percent))):
+            os.mkdir(os.path.join(self.outdir,'train'+'_'+'minority_oversampled'+'_'+str(self.minority_percent)))
+        if not os.path.exists(os.path.join(self.outdir,'train'+'_'+'minority_oversampled'+'_'+str(self.minority_percent),maj_pat.split('_')[1])):
+            os.mkdir(os.path.join(self.outdir,'train'+'_'+'minority_oversampled'+'_'+str(self.minority_percent),maj_pat.split('_')[1]))
+        if not os.path.exists(os.path.join(self.outdir,'train'+'_'+'minority_oversampled'+'_'+str(self.minority_percent),min_pat.split('_')[1])):
+            os.mkdir(os.path.join(self.outdir,'train'+'_'+'minority_oversampled'+'_'+str(self.minority_percent),min_pat.split('_')[1]))
+
+
+        #figure out how many files to balance proportions while keeping total files equal
+        #number files
+        print("number files is {}".format(len(all_files)))
+        num_minority_class=int(len(all_files) * (self.minority_percent))
+        num_needed_minority=int(len(all_files)*self.minority_percent)-len(lesser)
+        num_need_majority=len(greater)-int(len(all_files)*(1-self.minority_percent))
+
+        print('majority class number {}'.format(int(len(all_files)*(1-self.minority_percent))))
+        print('minority class number {}'.format(int(len(all_files) * (self.minority_percent))))
+        print("number in minorty class {}".format(num_minority_class))
+        print('number needed in minority {}'.format(num_needed_minority))
+        print('number needed in majority {}'.format(num_need_majority))
+
+
+        #copy majority and minority samples to new file
+        majority_sample=random.sample(greater,int(len(all_files)*(1-self.minority_percent)))
+        print("size majority sample is {}".format(len(majority_sample)))
+
+
+        for file in majority_sample:
+            initial_path=os.path.join(self.imgPATH,file)
+            final_path=os.path.join(self.outdir,'train'+'_'+'minority_oversampled'+'_'+str(self.minority_percent),maj_pat.split('_')[1],file)
+            shutil.copy2(initial_path,final_path)
+
+        #generate a list of images to
+        while len(lesser)<num_minority_class:
+            files_to_add=[file for file in random.sample(lesser,int(len(lesser)*0.05))]
+            lesser=lesser+files_to_add
+
+        print('size minorty class is {}'.format(len(lesser)))
+        for file in lesser:
+            initial_path=os.path.join(self.imgPATH,file)
+            final_path=os.path.join(self.outdir,'train'+'_'+'minority_oversampled'+'_'+str(self.minority_percent),min_pat.split('_')[1],file+'_'+''.join(random.sample('0123456789',5))+'.jpeg')
+            shutil.copy2(initial_path,final_path)
+
+
+
+
+    def balance_dataset(self,cat1,cat2):
+        '''
+        Figures out which subset of data is the smallest and oversamples until data are balanced
+        :return:
+        '''
+        diff=1 #initialization
+        while diff>=0:
+
+            cat1_num=len(os.listdir(os.path.join(self.outpath,'train',cat1)))
+            cat2_num = len(os.listdir(os.path.join(self.outpath, 'train', cat2)))
+
+            if cat1_num==cat2_num:
+                break
+            elif cat1_num>cat2_num:
+                smaller=cat2; larger_num=cat1_num;smaller_num=cat2_num
+            else:
+                smaller=cat1; larger_num=cat2_num;smaller_num=cat1_num
+
+            diff=larger_num-smaller_num
+            print("difference classes is {}".format(diff))
+            output=[os.path.join(self.outpath,'train',smaller,file) for file in os.listdir(os.path.join(self.outpath,'train',smaller))]
+            output_series=pd.Series(output)
+            val = output_series.sample(diff,replace=True)
+            print('performing oversampling!')
+
+            for file in val:
+                jpeg_removed = file.split('.jpeg')[0]
+                random_num=str(''.join(random.sample('0123456789', 5)))
+                new_filename=jpeg_removed+random_num+'.jpeg'
+                shutil.copy2(os.path.join(self.outpath,'train',file),os.path.join(self.outpath,'train',new_filename))
+
+
+
+    def make_out_dir(self,cat1,cat2):
+        '''
+        looks through all the values in the output directory and makes the correct data structure and makes folderss
+        for all necessary folder for pytorch ImageFolder.
+        '''
+
+        #define all directories
+        states=['train','valid']
+
+        for state in states:
+            path_state_dir=os.path.join(self.outpath,state)
+            if not os.path.exists(path_state_dir):
+                os.mkdir(path_state_dir)
+                os.chdir(path_state_dir)
+                if not os.path.exists(os.path.join(path_state_dir,cat1)):
+                    os.mkdir(os.path.join(path_state_dir,cat1))
+                if not os.path.exists(os.path.join(path_state_dir,cat2)):
+                    os.mkdir(os.path.join(path_state_dir,cat2))
+
+
+
+
+if __name__=='__main__':
+    c=OverUnderSample()
+    c.balance()
