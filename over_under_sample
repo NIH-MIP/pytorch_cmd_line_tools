@@ -12,8 +12,8 @@ class OverUnderSample:
     random.seed(4)
 
     def __init__(self):
-        self.imgPATH='/home/tom/Desktop/sampling_folder'
-        self.outdir='/home/tom/Desktop/outdir'
+        self.imgPATH=''
+        self.outdir=''
         self.first_pat='_res'
         self.sec_pat='_sens'
         self.valset=False
