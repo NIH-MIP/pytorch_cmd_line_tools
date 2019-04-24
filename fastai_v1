@@ -89,8 +89,9 @@ class VisionBinary:
         if self.neptune == True:
             with neptune.create_experiment():
                 if self.retrain==True:
-                    model_path = os.path.join(self.outdir, 'exported_models')
-                    learn = load_learner(model_path)
+                    model_path = os.path.join(self.outdir, 'saved_models', self.save_model_name)
+                    learn = cnn_learner(data, self.model_dict[self.resnet][0], metrics=error_rate)
+                    learn = learn.load(model_path)
                 else:
                     learn = cnn_learner(data, self.model_dict[self.resnet][0], metrics=error_rate)
 
@@ -99,8 +100,9 @@ class VisionBinary:
         #train loop without neptune
         else:
             if self.retrain == True:
-                model_path = os.path.join(self.outdir, 'exported_models')
-                learn = load_learner(model_path)
+                    model_path = os.path.join(self.outdir, 'saved_models', self.save_model_name)
+                    learn = cnn_learner(data, self.model_dict[self.resnet][0], metrics=error_rate)
+                    learn = learn.load(model_path)
             else:
                 learn = cnn_learner(data, self.model_dict[self.resnet][0], metrics=error_rate)
 
