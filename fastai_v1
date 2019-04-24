@@ -16,32 +16,35 @@ import neptune
 # same token as above
 # make sure to put correct project_qualified_name
 neptune.init(
-    api_token=
+    api_token='==', \
+    project_qualified_name='')
 
 
 class VisionBinary:
 
     def __init__(self):
-        self.imagedir='/data/Stephanie_Harmon/bladder_path/classification_byPatient/5x_patches/decon/300_thresh_0.8'
-        self.outdir='/data/Stephanie_Harmon/bladder_path/classification_byPatient/5x_patches/decon/300_thresh_0.8/pytorch_training'
-        self.testPath=os.path.join(self.imagedir,'dev_valid')
-        self.model_name='bladder_test'
-        self.tr_name='train'
-        self.val_name='valid'
-        self.resnet='resnet18'
-        self.img_sz=30
-        self.lr=0.00001
+        self.imagedir=''
+        self.outdir=''
+        self.testPath=os.path.join(self.imagedir,'val_bypatient')
+        self.model_name='5x_fortytwopoint5_percent'
+        self.tr_name='train_minority_oversampled_0.425'
+        self.val_name='val_allimgs'
+        self.resnet='resnet50'
+        self.img_sz=300
+        self.lr=0.0001
         self.lr_range=slice(1e-9, 1e-6)
-        self.bs=16
-        self.device=1
-        self.dc_e=1 #last layers epochs
-        self.all_e=1 #all epochs
+        self.bs=32
+        self.device=2
+        self.dc_e=5 #last layers epochs
+        self.all_e=5 #all epochs
         #self.lighting=0
         self.rotate=0
-        self.neptune=True
+        self.neptune=False
         self.unfreeze=False
         self.model_dict={'resnet18':[models.resnet18],'resnet34':[models.resnet34],'resnet50':[models.resnet50],
             'resnet101':[models.resnet101],'resnet152':[models.resnet152]}
+
+
 
         #retraining
         self.retrain=False
@@ -74,6 +77,8 @@ class VisionBinary:
         '''
 
         torch.cuda.set_device(self.device)
+
+        self.make_filestructure()
 
 
         data = self.load_jpg_from_folder()
@@ -112,7 +117,7 @@ class VisionBinary:
         return save_name
 
 
-    def convert_model_to_export(self, model_name='5x_resnet101_worker0_25constrnt_unfreeze_04222019-1057.pkl'):
+    def convert_model_to_export(self, model_name):
         initial_filename = os.path.join(self.outdir, 'exported_models', model_name)
         final_filename = os.path.join(self.outdir, 'exported_models', 'export.pkl')
         shutil.copy2(initial_filename, final_filename)
@@ -338,5 +343,5 @@ class VisionBinary:
 if __name__ == '__main__':
     c = VisionBinary()
     name = c.train()
-    c.convert_model_to_export()
+    c.convert_model_to_export(model_name=name)
     c.apply_test_vote()
