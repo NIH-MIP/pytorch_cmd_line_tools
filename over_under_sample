@@ -12,13 +12,13 @@ class OverUnderSample:
     random.seed(4)
 
     def __init__(self):
-        self.imgPATH=''
-        self.outdir=''
+        self.imgPATH='/home/tom/Desktop/sampling_folder'
+        self.outdir='/home/tom/Desktop/outdir'
         self.first_pat='_res'
         self.sec_pat='_sens'
         self.valset=False
         self.val_percent=0.2
-        self.minority_percent=0.7
+        self.minority_percent=0.1
 
 
     def balance(self):
@@ -70,19 +70,14 @@ class OverUnderSample:
         #number files
         print("number files is {}".format(len(all_files)))
         num_minority_class=int(len(all_files) * (self.minority_percent))
-        num_needed_minority=int(len(all_files)*self.minority_percent)-len(lesser)
-        num_need_majority=len(greater)-int(len(all_files)*(1-self.minority_percent))
-
-        print('majority class number {}'.format(int(len(all_files)*(1-self.minority_percent))))
-        print('minority class number {}'.format(int(len(all_files) * (self.minority_percent))))
-        print("number in minorty class {}".format(num_minority_class))
-        print('number needed in minority {}'.format(num_needed_minority))
-        print('number needed in majority {}'.format(num_need_majority))
 
 
         #copy majority and minority samples to new file
         majority_sample=random.sample(greater,int(len(all_files)*(1-self.minority_percent)))
-        print("size majority sample is {}".format(len(majority_sample)))
+
+        print("size majority sample {}".format(len(majority_sample)))
+        print("calculated size minority sample {}".format(num_minority_class))
+
 
 
         for file in majority_sample:
@@ -95,45 +90,14 @@ class OverUnderSample:
             files_to_add=[file for file in random.sample(lesser,int(len(lesser)*0.05))]
             lesser=lesser+files_to_add
 
-        print('size minorty class is {}'.format(len(lesser)))
+
         for file in lesser:
             initial_path=os.path.join(self.imgPATH,file)
             final_path=os.path.join(self.outdir,'train'+'_'+'minority_oversampled'+'_'+str(self.minority_percent),min_pat.split('_')[1],file.split('.jpeg')[0]+'_'+''.join(random.sample('0123456789',5))+'.jpeg')
             shutil.copy2(initial_path,final_path)
 
-
-
-
-    def balance_dataset(self,cat1,cat2):
-        '''
-        Figures out which subset of data is the smallest and oversamples until data are balanced
-        :return:
-        '''
-        diff=1 #initialization
-        while diff>=0:
-
-            cat1_num=len(os.listdir(os.path.join(self.outpath,'train',cat1)))
-            cat2_num = len(os.listdir(os.path.join(self.outpath, 'train', cat2)))
-
-            if cat1_num==cat2_num:
-                break
-            elif cat1_num>cat2_num:
-                smaller=cat2; larger_num=cat1_num;smaller_num=cat2_num
-            else:
-                smaller=cat1; larger_num=cat2_num;smaller_num=cat1_num
-
-            diff=larger_num-smaller_num
-            print("difference classes is {}".format(diff))
-            output=[os.path.join(self.outpath,'train',smaller,file) for file in os.listdir(os.path.join(self.outpath,'train',smaller))]
-            output_series=pd.Series(output)
-            val = output_series.sample(diff,replace=True)
-            print('performing oversampling!')
-
-            for file in val:
-                jpeg_removed = file.split('.jpeg')[0]
-                random_num=str(''.join(random.sample('0123456789', 5)))
-                new_filename=jpeg_removed+random_num+'.jpeg'
-                shutil.copy2(os.path.join(self.outpath,'train',file),os.path.join(self.outpath,'train',new_filename))
+        print("actual size majority sample is {}".format(len(majority_sample)))
+        print('actual size minorty class is {}'.format(len(lesser)))
 
 
 
