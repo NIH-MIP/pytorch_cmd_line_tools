@@ -12,27 +12,18 @@ class OverUnderSample:
     random.seed(4)
 
     def __init__(self):
-        self.imgPATH='/home/tom/Desktop/sampling_folder'
-        self.outdir='/home/tom/Desktop/outdir'
-        self.first_pat='_res'
-        self.sec_pat='_sens'
-        self.valset=False
-        self.val_percent=0.2
-        self.minority_percent=0.1
+        self.imgPATH='/data/Stephanie_Harmon/bladder_path/classification_bySite/All_Others/5x/train_allimgs'
+        self.outdir='/data/Stephanie_Harmon/bladder_path/classification_bySite/All_Others/5x'
+        self.first_pat='_neg'
+        self.sec_pat='_pos'
+        self.minority_percent=0.6
 
 
     def balance(self):
 
-        all_files=[file for file in os.listdir(self.imgPATH)]
+        files=[file for file in os.listdir(self.imgPATH)]
 
-        if self.valset==True:
-            subsample=random.sample(all_files,int(self.val_percent*len(all_files)))
-            files=list(set(all_files)-set(subsample))
-
-        elif self.valset==False:
-            files=all_files
-
-        #sort the files by pattern of recgonition
+        #sort the files by pattern
         first_pat_l=[]; sec_pat_l=[]
         for file in files:
             if re.search(self.first_pat,file):
@@ -41,7 +32,7 @@ class OverUnderSample:
                 sec_pat_l+=[file]
 
         #figure out which pattern is larger
-        if len(first_pat_l)>len(sec_pat_l):
+        if len(first_pat_l)>=len(sec_pat_l):
             greater=first_pat_l
             lesser=sec_pat_l
             maj_pat=self.first_pat; min_pat=self.sec_pat
@@ -49,12 +40,12 @@ class OverUnderSample:
             greater=sec_pat_l
             lesser=first_pat_l
             maj_pat = self.sec_pat;min_pat = self.first_pat
-        elif len(first_pat_l)==len(sec_pat_l):
-            print('lists are equal!')
+
 
         print("pattern {} has more samples than pattern {}".format(maj_pat.split('_')[1],min_pat.split('_')[1]))
         print("number in pattern {} is {}".format(maj_pat.split('_')[1],len(greater)))
         print("number in pattern {} is {}".format(min_pat.split('_')[1],len(lesser)))
+        print("number files is {}".format(len(files)))
 
 
         #set up filestructure for saving
@@ -68,36 +59,41 @@ class OverUnderSample:
 
         #figure out how many files to balance proportions while keeping total files equal
         #number files
-        print("number files is {}".format(len(all_files)))
-        num_minority_class=int(len(all_files) * (self.minority_percent))
+        num_minority_class=int(len(files) * (self.minority_percent))
+        num_majority_class=int(len(files) * (1-self.minority_percent))
+
+        print("number needed in minorty class to achieve desired split is {}".format(num_minority_class))
+        print("number needed in majority class to achieve desired split is {}".format(num_majority_class))
+
+        class_dict={'lesser':(lesser,num_minority_class,min_pat),
+                    'greater':(greater,num_majority_class,maj_pat)}
+
+        #Take subsample of majority class
+        for key in class_dict:
+            class_name=class_dict[key][0]; num_class=class_dict[key][1]; pat=class_dict[key][2]
+
+            #remove samples
+            if len(class_name)>=num_class:
+                while len(class_name) > num_class:
+                    files_to_remove=random.sample(class_name,2)
+                    class_name=list(set(class_name)-set(files_to_remove))
+
+            #oversample
+            elif len(class_name)<num_class:
+                while len(class_name)<num_class:
+                    files_to_add=random.sample(class_name,1)
+                    class_name=class_name+files_to_add
 
 
-        #copy majority and minority samples to new file
-        majority_sample=random.sample(greater,int(len(all_files)*(1-self.minority_percent)))
+            #make copies of majority samples to new class
+            count=0
+            for file in class_name:
+                count+=1
+                filename_save=file.split('.jpeg')[0]+'_'+str(''.join(random.sample('0123456789', 5)))+'.jpeg'
+                initial_path=os.path.join(self.imgPATH,file)
+                final_path=os.path.join(self.outdir,'train'+'_'+'minority_oversampled'+'_'+str(self.minority_percent),pat.split('_')[1],filename_save)
+                shutil.copy2(initial_path,final_path)
 
-        print("size majority sample {}".format(len(majority_sample)))
-        print("calculated size minority sample {}".format(num_minority_class))
-
-
-
-        for file in majority_sample:
-            initial_path=os.path.join(self.imgPATH,file)
-            final_path=os.path.join(self.outdir,'train'+'_'+'minority_oversampled'+'_'+str(self.minority_percent),maj_pat.split('_')[1],file)
-            shutil.copy2(initial_path,final_path)
-
-        #generate a list of images to
-        while len(lesser)<num_minority_class:
-            files_to_add=[file for file in random.sample(lesser,int(len(lesser)*0.05))]
-            lesser=lesser+files_to_add
-
-
-        for file in lesser:
-            initial_path=os.path.join(self.imgPATH,file)
-            final_path=os.path.join(self.outdir,'train'+'_'+'minority_oversampled'+'_'+str(self.minority_percent),min_pat.split('_')[1],file.split('.jpeg')[0]+'_'+''.join(random.sample('0123456789',5))+'.jpeg')
-            shutil.copy2(initial_path,final_path)
-
-        print("actual size majority sample is {}".format(len(majority_sample)))
-        print('actual size minorty class is {}'.format(len(lesser)))
 
 
 
