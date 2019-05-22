@@ -12,8 +12,8 @@ class OverUnderSample:
     random.seed(4)
 
     def __init__(self):
-        self.imgPATH='/data/Stephanie_Harmon/bladder_path/classification_bySite/All_Others/5x/train_allimgs'
-        self.outdir='/data/Stephanie_Harmon/bladder_path/classification_bySite/All_Others/5x'
+        self.imgPATH=''
+        self.outdir=''
         self.first_pat='_neg'
         self.sec_pat='_pos'
         self.minority_percent=0.6
