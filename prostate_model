@@ -1,0 +1,481 @@
+import os
+import sys
+import datetime
+import numpy as np
+
+import fastai.vision as faiv
+import numpy as np
+import matplotlib.pyplot as plt
+import torch
+from torch import nn
+import statistics
+from collections import Counter
+
+
+from fastai.vision import *
+import fastai
+
+
+#local import
+from numpy_slice_list import *
+
+
+# same token as above
+# make sure to put correct project_qualified_name
+
+class VisionBinary:
+
+    def __init__(self):
+        self.imagedir='/home/mip/TS/PIRADS/model_dev_all'
+        self.outdir='/home/mip/TS/PIRADS/model_dev_all/training_log'
+        self.testPath=os.path.join(self.imagedir,'test')
+        self.model_name='train'
+        self.tr_name='train'
+        self.val_name='val'
+        self.resnet='resnet50'
+        self.img_sz=224
+        self.lr=0.005
+        self.lr_range=slice(1e-9, 1e-4)
+        self.bs=64
+        self.device=0
+        self.dc_e=10 #last layers epochs
+        self.all_e=10 #all epochs
+        self.rotate=45
+        self.unfreeze=False
+        self.weightedloss=False
+        self.weights = [2.,1.]
+        self.model_dict={'resnet18':[models.resnet18],'resnet34':[models.resnet34],'resnet50':[models.resnet50],
+            'resnet101':[models.resnet101],'resnet152':[models.resnet152]}
+
+
+        #retraining
+        self.retrain=False
+        #self.retraindir = '/data/Stephanie_Harmon/bladder_path/all_pts/classification_042519/All_Others/10x/training_log'
+        #self.save_model_name='10x_fullset_fortytwo_final_layers_tuned_04302019-0824'
+
+
+    def load_numpy_from_folder(self):
+        '''
+        expects a path to a base folder with multiple subfolders including 'training', 'testing', etc
+        :param path:
+        :return: databunch
+        '''
+
+        #tfms =([*rand_pad(padding=3, size=self.img_sz, mode='zeros')], [])
+        #tfms = get_transforms(flip_vert=False,max_rotate=3, max_warp = 0.2, max_lighting = 0.1, p_lighting = 0.75, p_affine = 0.75)
+        #tfms = get_transforms(flip_vert=True, max_rotate=self.rotate, max_lighting = self.lighting)
+        #extralist = [rgb_randomize(channel=1,thresh=0.9999)]
+        tfms = get_transforms(flip_vert=False,max_rotate=3, max_warp = 0.1, max_lighting = 0.1, p_lighting = 0.5, p_affine = 0.75) #, xtra_tfms=extralist)
+
+        data = (NpyRawImageList.from_folder(self.imagedir)
+                .split_by_folder(train=self.tr_name, valid=self.val_name)
+                .label_from_folder()
+                .databunch(bs=self.bs)
+                .normalize()
+                )
+        return data
+
+
+    def train(self):
+        '''
+        trains a resnet with the parameters listed above
+        :return:
+        '''
+
+        torch.cuda.set_device(self.device)
+
+        self.make_filestructure()
+
+
+        data = self.load_numpy_from_folder()
+        print('data loaded')
+        print('classes in this dataset are {}'.format(data.classes))
+
+
+        if self.weightedloss==True:
+            w = torch.cuda.FloatTensor(self.weights)
+            learn = cnn_learner(data, self.model_dict[self.resnet][0], metrics=error_rate, wd=0.1,loss_func=torch.nn.CrossEntropyLoss(weight=w))
+
+        else:
+            learn = cnn_learner(data, self.model_dict[self.resnet][0], metrics=error_rate, wd=0.1)
+
+        self.trainblock(learner=learn)
+
+        save_name = self.model_name + "_" + str(datetime.datetime.now().strftime("%m%d%Y-%H%M")) + '.pkl'
+
+        #save figures
+        self.save_figures(learner=learn)
+
+        # save hyperparameters
+        self.save_hyperparameters(filename='hyperparameters')
+
+        print(save_name)
+
+        return save_name
+
+
+
+
+####################
+# helper functions #
+####################
+
+    def trainblock(self,learner):
+        '''basic block to train network
+        a fastai learner will need tobe defined ebfore the model is trained
+        '''
+
+        learn=learner
+        learn.fit_one_cycle(self.dc_e, max_lr=self.lr)
+
+        if self.unfreeze==False:
+            learn.save(os.path.join(self.outdir, 'saved_models', self.model_name + "_" + 'final_layers_tuned_' + str(
+                datetime.datetime.now().strftime("%m%d%Y-%H%M")+'.pkl')))
+            learn.export(os.path.join(self.outdir, 'exported_models', self.model_name + "_" + str(
+                datetime.datetime.now().strftime("%m%d%Y-%H%M") + '.pkl')))
+
+        # loop to train if unfreezing is desired
+        if self.unfreeze == True:
+            print("unfreezing and retraining")
+            learn.unfreeze()
+            learn.fit_one_cycle(self.all_e, max_lr=self.lr_range)
+            learn.save(
+                os.path.join(self.outdir, 'saved_models', self.model_name + "_" + 'all_layers_trained_' + str(
+                    datetime.datetime.now().strftime("%m%d%Y-%H%M")+'.pkl')))
+            learn.export(os.path.join(self.outdir, 'exported_models', self.model_name + "_" + str(
+                datetime.datetime.now().strftime("%m%d%Y-%H%M")+'.pkl')))
+
+    def save_figures(self,learner):
+        interp = ClassificationInterpretation.from_learner(learner)
+        losses, idxs = interp.top_losses()
+        interp.plot_confusion_matrix(figsize=(12, 12), dpi=60)
+        plt.savefig(os.path.join(self.outdir, 'confusion_matrix',
+                                 self.model_name + '_' + str(datetime.datetime.now().strftime("%m%d%Y-%H%M")+'.jpg')))
+        interp.plot_top_losses(9, figsize=(15, 11))
+        plt.savefig(os.path.join(self.outdir, 'top_loss',
+                                 self.model_name + '_' + str(datetime.datetime.now().strftime("%m%d%Y-%H%M")+'.jpg')))
+
+    def save_hyperparameters(self,filename='hyperparameters'):
+        file = open(
+            os.path.join(self.outdir, 'hyperparameters',
+                         filename + '_' + self.model_name + '_' + str(
+                             datetime.datetime.now().strftime("%m%d%Y-%H%M")) + '.txt'), 'w')
+        file.write(
+            'hyper-parameters for model at {} \n'.format(
+                str(datetime.datetime.now().strftime("%m%d%Y-%H%M"))))
+        file.write('Resnet type is: {} \n'.format(self.model_dict[self.resnet][0]))
+        file.write('model name is: {} \n'.format(self.model_name))
+        print('model name is: {} \n'.format(self.model_name))
+        file.write('training name is: {} \n'.format(self.tr_name))
+        file.write('validation name is: {} \n'.format(self.val_name))
+        file.write('image size is: {} \n'.format(self.img_sz))
+        file.write('learning rate for dense connected is: {} \n'.format(self.lr))
+        print('learning rate for dense connected is: {} \n'.format(self.lr))
+        file.write('learning rate range for whole network is: {} \n'.format(self.lr_range))
+        print('learning rate for dense connected is: {} \n'.format(self.lr))
+        file.write('batch size is: {} \n'.format(self.bs))
+        file.write('this model was trained on device: {} \n'.format(self.device))
+        print('this model was trained on device: {} \n'.format(self.device))
+        file.write('number epochs densely connnected: {} \n'.format(self.dc_e))
+        file.write('number epochs all layers: {} \n'.format(self.all_e))
+        file.write('unfreeze?: {} \n'.format(str(self.unfreeze)))
+        file.write('weighting: {} \n'.format(str(self.weights)))
+        # file.write('lighting?: {} \n'.format(str(self.lighting)))
+        file.close()
+
+    def make_filestructure(self):
+        '''
+        make the file structure to write out all saved files
+        :return:
+        '''
+        # make the filestructure for saving
+        if not os.path.isdir(self.outdir):
+            os.mkdir(self.outdir)
+        if not os.path.isdir(os.path.join(self.outdir, 'confusion_matrix')):
+            os.mkdir(os.path.join(self.outdir, 'confusion_matrix'))
+        if not os.path.isdir(os.path.join(self.outdir, 'top_loss')):
+            os.mkdir(os.path.join(self.outdir, 'top_loss'))
+        if not os.path.isdir(os.path.join(self.outdir, 'saved_models')):
+            os.mkdir(os.path.join(self.outdir, 'saved_models'))
+        if not os.path.isdir(os.path.join(self.outdir, 'hyperparameters')):
+            os.mkdir(os.path.join(self.outdir, 'hyperparameters'))
+        if not os.path.isdir(os.path.join(self.outdir, 'exported_models')):
+            os.mkdir(os.path.join(self.outdir, 'exported_models'))
+
+    ##############
+    ### Apply ####
+    ##############
+
+    def convert_model_to_export(self, model_name):
+        initial_filename = os.path.join(self.outdir, 'exported_models', model_name)
+        final_filename = os.path.join(self.outdir, 'exported_models', 'export.pkl')
+        shutil.copy2(initial_filename, final_filename)
+
+    def apply_test_logistic(self,class1='PIRADS_2_3', class2='PIRADS_4_5',summary='mean'):
+        '''applies test set on patient level using softmax output'''
+
+
+        torch.cuda.set_device(self.device)
+
+        # set up the output directory
+        if not os.path.isdir(self.outdir):
+            os.mkdir(self.outdir)
+        if not os.path.isdir(os.path.join(self.outdir, 'val_results')):
+            os.mkdir(os.path.join(self.outdir, 'val_results'))
+
+        # get paths straight
+        model_path = os.path.join(self.outdir, 'exported_models')
+        learn = load_learner(model_path)
+        test_path = self.testPath
+
+        #initialize
+        correct=0
+        incorrect=0
+        total_class1=0
+        total_class2=0
+        correct_class1=0
+        correct_class2=0
+        correct_pts=[]
+        incorrect_pts=[]
+        conf_correct_patients=[]
+        conf_incorrect_patients=[]
+
+        for patient in os.listdir(os.path.join(test_path)):
+            #create lists of each predicted probabilited
+            n_images=0
+            pred_class1_list = []
+            pred_class2_list = []
+            for image in os.listdir(os.path.join(test_path, patient)):
+                n_images+=1
+                img = open_image(os.path.join(test_path, patient, image))
+                pred_class, pred_idx, outputs = learn.predict(img)
+                pred_class_logit = outputs.numpy()
+                pred_class1_list+=[float(pred_class_logit[0])]
+                pred_class2_list+=[float(pred_class_logit[1])]
+
+            #summarize preditions
+            if summary=='mean':
+                sum_preds=np.asarray([statistics.mean(pred_class1_list),statistics.mean(pred_class2_list)])
+            elif summary=='median':
+                sum_preds=np.asarray([statistics.median(pred_class1_list),statistics.median(pred_class2_list)])
+
+            print("summary of data over image is {}".format(sum_preds))
+            pred_tumor_class=np.argmax(sum_preds)
+            pred_high=np.amax(sum_preds)
+
+            #determine confidnce level:
+            if pred_high>0.75:
+                confidence='high'
+            elif 0.6<pred_high<0.75:
+                confidence='medium'
+            elif pred_high<0.6:
+                confidence='low'
+
+
+            #assign prediction to class
+            if pred_tumor_class==0:
+                tumor_pred = class1
+            elif pred_tumor_class==1:
+                tumor_pred = class2
+
+            print("class of tumor {} is {}".format(patient,pred_tumor_class))
+
+
+            # find ground turth
+            int_val = int(patient.split('_')[7])
+            if int_val <= 3:
+                gt = class1
+            elif int_val > 3:
+                gt = class2
+
+            #check if correct
+            if tumor_pred==gt:
+                print("correct!")
+                correct+=1
+                correct_pts+=[(patient,confidence,sum_preds)]
+                conf_correct_patients+=[confidence]
+
+            elif tumor_pred!=gt:
+                print("INCORRECT!")
+                incorrect+=1
+                incorrect_pts+=[(patient,pred_high,sum_preds)]
+                conf_incorrect_patients += [confidence]
+
+            #check if correct by class
+            if gt==class1:
+                total_class1+=1
+                if tumor_pred == gt:
+                    correct_class1 += 1
+
+            elif gt==class2:
+                total_class2+=1
+                if tumor_pred == gt:
+                    correct_class2 += 1
+
+        print("")
+        print("----------------------")
+        print("Overall Correct Percent")
+        print(correct/(correct+incorrect))
+        print("correct " + class1)
+        print(correct_class1 / total_class1)
+        print("correct " + class2)
+        print(correct_class2 / total_class2)
+        print(correct_pts)
+        print(incorrect_pts)
+        print("confidence for correct patients: {}".format(Counter(conf_correct_patients)))
+        print("confidence for incorrect patients: {}".format(Counter(conf_incorrect_patients)))
+
+
+
+    def apply_test_vote(self, class1='PIRADS_2_3', class2='PIRADS_4_5', prostate=True, index=7, class1_list=['PIRADS_2_3'], class2_list=['PIRADS_4_5']):
+        '''
+        applies model on patient level
+        :param class1(str): one class label output from learn.predict
+        :param class2(str): another one class label output from learn.predict
+        :param index(int): where to index in
+        :param class1_list: list of all labels in first class
+        :param class2_list: list of all labels in 2nd class
+        :return:
+        '''
+
+        torch.cuda.set_device(self.device)
+
+        # set up the output directory
+        if not os.path.isdir(self.outdir):
+            os.mkdir(self.outdir)
+        if not os.path.isdir(os.path.join(self.outdir, 'val_results')):
+            os.mkdir(os.path.join(self.outdir, 'val_results'))
+
+        # change this part
+        model_path = os.path.join(self.outdir, 'exported_models')
+        learn = load_learner(model_path)
+        test_path = self.testPath
+
+        total = 0
+        votes_class1 = 0
+        votes_class2 = 0
+        gt_class1 = 0
+        gt_class2 = 0
+        pred_class_1 = 0
+        pred_class_2 = 0
+        correct = 0
+        incorrect = 0
+        correct_class1 = 0
+        correct_class2 = 0
+
+        df_out = pd.DataFrame()
+
+        for patient in os.listdir(os.path.join(test_path)):
+            total += 1
+            print(patient)
+            votes_class1 = 0
+            votes_class2 = 0
+
+            for image in os.listdir(os.path.join(test_path, patient)):
+                img = open_image(os.path.join(test_path, patient, image))
+                pred_class, pred_idx, outputs = learn.predict(img)
+
+                outputs_np=outputs.numpy()
+                neg_sofmx=outputs_np[0]
+                pos_sofmx=outputs_np[1]
+
+
+                pred_class = str(pred_class)
+                if pred_class == class1:
+                    votes_class1 += 1
+                if pred_class == class2:
+                    votes_class2 += 1
+
+                t_df=pd.DataFrame([image,pred_class,neg_sofmx,pos_sofmx]).transpose()
+                df_out=pd.concat([df_out,t_df],axis=0)
+
+            print(df_out.shape)
+            print('votes ' + class1 + ': {}'.format(votes_class1))
+            print('votes ' + class2 + ' : {}'.format(votes_class2))
+
+            # find ground turth
+            if prostate == True:
+                int_val=int(patient.split('_')[7])
+                if int_val>3:
+                    gt='PIRADS_4_5'
+                if int_val<=3:
+                    gt='PIRADS_2_3'
+
+            elif prostate == False:
+                gt = patient.split('_')[index]
+
+            print('Ground truth PIRADS score is {}'.format(int_val))
+            print('Ground truth class is {}'.format(gt))
+            if gt in class1_list:
+                gt_class1 += 1
+                gt = class1
+
+            elif gt in class2_list:
+                gt_class2 += 1
+                gt = class2
+
+            if votes_class1 > votes_class2:
+                pred_class_1 += 1
+                pred = class1
+
+            elif votes_class1 < votes_class2:
+                pred_class_2 += 1
+                pred = class2
+
+            elif votes_class1 == votes_class2:
+                pred_class_2 += 1
+                pred = class2
+
+            print("Prediction is {}".format(pred))
+
+            if gt == pred:
+                correct += 1
+                print("correct!")
+
+            elif gt != pred:
+                incorrect += 1
+                print("INCORRECT!")
+
+            if gt == class1 and gt == pred:
+                correct_class1 += 1
+
+            if gt == class2 and gt == pred:
+                correct_class2 += 1
+
+        print("")
+        print("----------------------")
+        print("Overall Correct Percent")
+        print(correct / total)
+        print("correct " + class1)
+        print(correct_class1 / gt_class1)
+        print("correct " + class2)
+        print(correct_class2 / gt_class2)
+
+        #write results out to file
+
+        file = open(
+            os.path.join(self.outdir, 'val_results', 'performance' + '_' + self.model_name + '_' + str(
+                datetime.datetime.now().strftime("%m%d%Y-%H%M")) + '.txt'), 'w')
+        file.write(
+            'validation results for model trained {} \n'.format(str(datetime.datetime.now().strftime("%m%d%Y-%H%M"))))
+        file.write('overall correct percent {}: \n'.format(str(correct / total)))
+        file.write('correct' + class1 + ' {}: \n'.format(str(correct_class1 / gt_class1)))
+        file.write('correct' + class2 + ' {}: \n'.format(str(correct_class2 / gt_class2)))
+        file.close()
+
+        #write dataframe out to csv
+        df_out.columns=['img_name','class_pred','neg_pred','pos_pred']
+        df_out.to_csv(os.path.join(self.outdir, 'val_results', 'val_results_by_img' + '_' + self.model_name + '_' + str(
+                datetime.datetime.now().strftime("%m%d%Y-%H%M")) + '.csv'))
+
+
+
+
+if __name__ == '__main__':
+    c = VisionBinary()
+    name = c.train()
+    c.convert_model_to_export(model_name=name)
+    c.apply_test_logistic()
+    #c.apply_test_vote()
+
+    #best model thus far: 'train_05232019-2044.pkl'
